@@ -54,6 +54,12 @@ def parse_json(data):
 ######################################################################
 
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint to verify server status"""
+    return {"status": "OK"}, 200
+
+
 @app.route("/count")
 def count():
     """return length of data"""
