@@ -45,9 +45,116 @@ db = client.songs
 db.songs.drop()
 db.songs.insert_many(songs_list)
 
+
 def parse_json(data):
     return json.loads(json_util.dumps(data))
 
 ######################################################################
 # INSERT CODE HERE
 ######################################################################
+
+
+@app.route("/count")
+def count():
+    """return length of data"""
+    count = db.songs.count_documents({})
+    return {"count": count}, 200
+
+
+@app.route("/song")
+def songs():
+    """Return all songs in the database"""
+    # Find all documents in the songs collection
+    songs_cursor = db.songs.find({})
+
+    # Convert the cursor to a list and parse the JSON
+    # to handle MongoDB-specific types like ObjectId
+    songs_list = parse_json(list(songs_cursor))
+
+    # Return the songs as a dictionary with "songs" key
+    # and HTTP 200 OK status code
+    return {"songs": songs_list}, 200
+
+
+@app.route("/song/<int:id>")
+def get_song_by_id(id):
+    """Retrieve a specific song by its ID"""
+    # Convert id to integer to match the database schema
+    # Use find_one to get the first matching document
+    song = db.songs.find_one({"id": id})
+
+    # Check if song is found
+    if song is None:
+        # Return 404 Not Found with message if song doesn't exist
+        return {"message": "song with id not found"}, 404
+
+    # Parse the song document and return with 200 OK status
+    return parse_json(song), 200
+
+
+@app.route("/song", methods=["POST"])
+def create_song():
+    """Create a new song in the database"""
+    # Get the song data from the request body
+    song = request.get_json()
+
+    # Check if a song with the same id already exists
+    existing_song = db.songs.find_one({"id": song.get('id')})
+
+    # If song already exists, return 302 Found status
+    if existing_song is not None:
+        return {"Message": f"song with id {song['id']} already present"}, 302
+
+    # Insert the new song into the database
+    # Note: We're using insert_one which returns an InsertOneResult object
+    result = db.songs.insert_one(song)
+
+    # Return the inserted document's ID with 201 Created status
+    return {"inserted id": parse_json(result.inserted_id)}, 201
+
+
+@app.route("/song/<int:id>", methods=["PUT"])
+def update_song(id):
+    """Update an existing song in the database"""
+    # Get the song data from the request body
+    update_data = request.get_json()
+
+    # Check if the song exists
+    existing_song = db.songs.find_one({"id": id})
+
+    # If song does not exist, return 404 Not Found
+    if existing_song is None:
+        return {"message": "song not found"}, 404
+
+    # Perform the update
+    # Use $set to update only the provided fields
+    update_result = db.songs.update_one(
+        {"id": id},
+        {"$set": update_data}
+    )
+
+    # Check if anything was actually modified
+    if update_result.modified_count == 0:
+        return {"message": "song found, but nothing updated"}, 200
+
+    # Retrieve the updated song
+    updated_song = db.songs.find_one({"id": id})
+
+    # Return the updated song with 201 Created status
+    return parse_json(updated_song), 201
+
+
+@app.route("/song/<int:id>", methods=["DELETE"])
+def delete_song(id):
+    """Delete a song from the database"""
+    # Attempt to delete the song with the specified id
+    delete_result = db.songs.delete_one({"id": id})
+
+    # Check if any document was deleted
+    if delete_result.deleted_count == 0:
+        # If no song was found and deleted, return 404 Not Found
+        return {"message": "song not found"}, 404
+
+    # If song was successfully deleted, return 204 No Content
+    # This means the request was successful but there's no content to return
+    return '', 204
